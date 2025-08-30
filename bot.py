@@ -1,7 +1,69 @@
 import os
 import requests
 from flask import Flask, request, Response
+def txt_to_html(text: str) -> str:
+    subjects = []
+    current_subject = None
+    lines = text.splitlines()
 
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        if line.startswith("# "):  # Heading as subject
+            current_subject = {"title": line[2:], "items": []}
+            subjects.append(current_subject)
+        else:
+            if current_subject is None:
+                current_subject = {"title": "General", "items": []}
+                subjects.append(current_subject)
+            current_subject["items"].append(line)
+
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Notes</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    video { width: 100%; max-height: 400px; border-radius: 10px; margin-bottom:20px; }
+    .subject-box { padding: 12px; margin: 12px 0; border-radius: 10px; background: #f5f5f5; }
+    .subject-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+    .item { margin-left: 20px; margin-bottom: 6px; }
+    .credit { margin-top:20px; text-align:center; font-size:14px; opacity:0.7; }
+  </style>
+  <script>
+    function play(link){
+        const p = document.getElementById('player');
+        p.src = link;
+        p.play();
+        window.scrollTo({ top:0, behavior:'smooth' });
+    }
+  </script>
+</head>
+<body>
+  <h2>📺 Video Player</h2>
+  <video id="player" controls></video>
+"""
+
+    # Subject wise box
+    for subject in subjects:
+        html += f"<div class='subject-box'>"
+        html += f"<div class='subject-title'>{subject['title']}</div>"
+        for item in subject["items"]:
+            if item.startswith("http"):
+                html += f"<div class='item'><a href='#' onclick=\"play('{item}')\">▶️ {item}</a></div>"
+            else:
+                html += f"<div class='item'>{item}</div>"
+        html += "</div>"
+
+    html += """
+  <div class="credit">Made by Antaryami 🇮🇳</div>
+</body>
+</html>
+"""
+    return html
 TOKEN = os.environ.get("TELEGRAM_TOKEN") or "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0"
 app = Flask(__name__)
 
