@@ -1,6 +1,11 @@
 import os
 import requests
-from flask import Flask, request, Response
+from flask import Flask, request
+
+TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_BOT_TOKEN")
+app = Flask(__name__)
+
+# ---------------- HTML Generator (same UI as your HTML file) ---------------- #
 def txt_to_html(text: str) -> str:
     subjects = []
     current_subject = None
@@ -11,7 +16,7 @@ def txt_to_html(text: str) -> str:
         if not line:
             continue
 
-        if line.startswith("# "):  # Heading as subject
+        if line.startswith("# "):  # Subject heading
             current_subject = {"title": line[2:], "items": []}
             subjects.append(current_subject)
         else:
@@ -20,18 +25,74 @@ def txt_to_html(text: str) -> str:
                 subjects.append(current_subject)
             current_subject["items"].append(line)
 
+    # ===== Template (same style as your uploaded HTML) =====
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Notes</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    video { width: 100%; max-height: 400px; border-radius: 10px; margin-bottom:20px; }
-    .subject-box { padding: 12px; margin: 12px 0; border-radius: 10px; background: #f5f5f5; }
-    .subject-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-    .item { margin-left: 20px; margin-bottom: 6px; }
-    .credit { margin-top:20px; text-align:center; font-size:14px; opacity:0.7; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #333;
+    }
+    .subject-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .subject-title {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #007bff;
+    }
+    .item {
+      margin-left: 20px;
+      margin-bottom: 10px;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #444;
+    }
+    .item a {
+      color: #e63946;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .item a:hover {
+      text-decoration: underline;
+    }
+    .player {
+      width: 100%;
+      max-width: 720px;
+      margin: 20px auto;
+      display: block;
+    }
+    video {
+      width: 100%;
+      border-radius: 10px;
+    }
+    .credit {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 14px;
+      color: #555;
+      opacity: 0.8;
+    }
   </style>
   <script>
     function play(link){
@@ -43,11 +104,12 @@ def txt_to_html(text: str) -> str:
   </script>
 </head>
 <body>
-  <h2>📺 Video Player</h2>
-  <video id="player" controls></video>
+  <div class="container">
+    <h1>📘 My Notes</h1>
+    <video id="player" class="player" controls></video>
 """
 
-    # Subject wise box
+    # ---- Insert subjects + items ----
     for subject in subjects:
         html += f"<div class='subject-box'>"
         html += f"<div class='subject-title'>{subject['title']}</div>"
@@ -59,146 +121,34 @@ def txt_to_html(text: str) -> str:
         html += "</div>"
 
     html += """
-  <div class="credit">Made by Antaryami 🇮🇳</div>
-</body>
-</html>
-"""
-    return html
-TOKEN = os.environ.get("TELEGRAM_TOKEN") or "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0"
-app = Flask(__name__)
-
-# --- TXT → HTML Converter ---
-def txt_to_html(text: str) -> str:
-    subjects = []
-    current_subject = None
-    lines = text.splitlines()
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if line.startswith("# "):  # Heading as subject
-            current_subject = {"title": line[2:], "items": []}
-            subjects.append(current_subject)
-        else:
-            if current_subject is None:
-                current_subject = {"title": "General", "items": []}
-                subjects.append(current_subject)
-            current_subject["items"].append(line)
-
-    html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Notes</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      transition: background 0.3s, color 0.3s;
-    }
-    body.light { background: #ffffff; color: #000000; }
-    body.dark { background: #121212; color: #ffffff; }
-
-    .toggle-btn {
-      padding: 8px 16px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      margin-bottom: 20px;
-    }
-
-    .subject-box {
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    .subject-title {
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-    .item {
-      margin-left: 20px;
-      margin-bottom: 8px;
-    }
-
-    .credit {
-      margin-top: 30px;
-      font-size: 14px;
-      text-align: center;
-      opacity: 0.7;
-    }
-
-    video {
-      width: 100%;
-      max-height: 400px;
-      margin-top: 10px;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body class="light">
-  <button class="toggle-btn" onclick="toggleTheme()">🌗 Toggle Theme</button>
-"""
-
-    # Subject wise box
-    colors = ["#f8d7da", "#d4edda", "#d1ecf1", "#fff3cd", "#e2e3e5"]
-    for idx, subject in enumerate(subjects):
-        color = colors[idx % len(colors)]
-        html += f"<div class='subject-box' style='background:{color}'>"
-        html += f"<div class='subject-title'>{subject['title']}</div>"
-        for item in subject["items"]:
-            if item.startswith("http"):
-                # Video link
-                if item.endswith((".mp4", ".m3u8")):
-                    html += f"<div class='item'><video controls src='{item}'></video></div>"
-                else:
-                    html += f"<div class='item'><a href='{item}' target='_blank'>{item}</a></div>"
-            else:
-                html += f"<div class='item'>{item}</div>"
-        html += "</div>"
-
-    html += """
-  <div class="credit">Made by Antaryami 🇮🇳</div>
-
-  <script>
-    function toggleTheme(){
-      document.body.classList.toggle('dark');
-      document.body.classList.toggle('light');
-    }
-  </script>
+    <div class="credit">Made by Antaryami 🇮🇳</div>
+  </div>
 </body>
 </html>
 """
     return html
 
-# --- Send HTML back to Telegram ---
+# ---------------- Send HTML back to Telegram ---------------- #
 def send_html(chat_id, html_content):
-    with open("output.html", "w", encoding="utf-8") as f:
-        f.write(html_content)
-
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
-    files = {"document": open("output.html", "rb")}
-    data = {"chat_id": chat_id, "caption": "✅ Here is your HTML file\nMade by Antaryami 🇮🇳"}
-    requests.post(url, files=files, data=data)
+    files = {"document": ("notes.html", html_content, "text/html")}
+    data = {"chat_id": chat_id, "caption": "✅ HTML file generated\nMade by Antaryami 🇮🇳"}
+    requests.post(url, data=data, files=files)
 
-# --- Webhook ---
+# ---------------- Webhook ---------------- #
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
 def webhook():
     data = request.get_json()
     if "message" in data:
         chat_id = data["message"]["chat"]["id"]
 
-        # --- Case 1: Normal text ---
+        # Case 1: Plain text input
         if "text" in data["message"]:
             text = data["message"]["text"]
             html_content = txt_to_html(text)
             send_html(chat_id, html_content)
 
-        # --- Case 2: TXT file upload ---
+        # Case 2: TXT file input
         elif "document" in data["message"]:
             file_id = data["message"]["document"]["file_id"]
 
@@ -206,19 +156,21 @@ def webhook():
             file_info = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}").json()
             file_path = file_info["result"]["file_path"]
 
-            # Download the file
+            # Download file
             file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
             txt_data = requests.get(file_url).text
 
-            # Convert to HTML and send back
+            # Convert & send back
             html_content = txt_to_html(txt_data)
             send_html(chat_id, html_content)
 
     return {"ok": True}
 
+# ---------------- Root Route ---------------- #
 @app.route("/")
 def home():
     return "Bot is running ✅"
 
+# ---------------- Local Run ---------------- #
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
