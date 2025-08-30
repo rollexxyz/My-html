@@ -5,7 +5,7 @@ from flask import Flask, request
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_BOT_TOKEN")
 app = Flask(__name__)
 
-# ---------------- HTML Generator (same UI as your HTML file) ---------------- #
+# ---------------- HTML Generator (Same UI + Play Button) ---------------- #
 def txt_to_html(text: str) -> str:
     subjects = []
     current_subject = None
@@ -25,74 +25,29 @@ def txt_to_html(text: str) -> str:
                 subjects.append(current_subject)
             current_subject["items"].append(line)
 
-    # ===== Template (same style as your uploaded HTML) =====
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Notes</title>
   <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f0f2f5;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 1000px;
-      margin: auto;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 30px;
-      color: #333;
-    }
+    body { font-family: 'Segoe UI', sans-serif; background:#f0f2f5; }
+    .container { max-width: 1000px; margin:auto; padding:20px; }
+    h1 { text-align:center; margin-bottom:30px; color:#333; }
     .subject-box {
-      background: #fff;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      background:#fff; border-radius:12px; padding:20px; margin-bottom:20px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
     }
-    .subject-title {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 15px;
-      color: #007bff;
+    .subject-title { font-size:22px; font-weight:bold; margin-bottom:15px; color:#007bff; }
+    .item { margin-left:20px; margin-bottom:10px; font-size:16px; }
+    .item button {
+      background:none; border:none; color:#e63946; font-size:16px; cursor:pointer;
+      text-align:left; padding:0;
     }
-    .item {
-      margin-left: 20px;
-      margin-bottom: 10px;
-      font-size: 16px;
-      line-height: 1.6;
-      color: #444;
-    }
-    .item a {
-      color: #e63946;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    .item a:hover {
-      text-decoration: underline;
-    }
-    .player {
-      width: 100%;
-      max-width: 720px;
-      margin: 20px auto;
-      display: block;
-    }
-    video {
-      width: 100%;
-      border-radius: 10px;
-    }
-    .credit {
-      margin-top: 40px;
-      text-align: center;
-      font-size: 14px;
-      color: #555;
-      opacity: 0.8;
-    }
+    .item button:hover { text-decoration:underline; }
+    .player { width:100%; max-width:720px; margin:20px auto; display:block; }
+    video { width:100%; border-radius:10px; }
+    .credit { margin-top:40px; text-align:center; font-size:14px; color:#555; opacity:0.8; }
   </style>
   <script>
     function play(link){
@@ -109,13 +64,13 @@ def txt_to_html(text: str) -> str:
     <video id="player" class="player" controls></video>
 """
 
-    # ---- Insert subjects + items ----
     for subject in subjects:
         html += f"<div class='subject-box'>"
         html += f"<div class='subject-title'>{subject['title']}</div>"
         for item in subject["items"]:
             if item.startswith("http"):
-                html += f"<div class='item'><a href='#' onclick=\"play('{item}')\">▶️ {item}</a></div>"
+                # 👇 Button banaya (new tab nahi khulega, direct play hoga)
+                html += f"<div class='item'><button onclick=\"play('{item}')\">▶️ {item}</button></div>"
             else:
                 html += f"<div class='item'>{item}</div>"
         html += "</div>"
