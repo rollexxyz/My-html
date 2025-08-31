@@ -1,4 +1,5 @@
 import os
+import asyncio
 from flask import Flask, request
 from telegram import Update, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -11,6 +12,10 @@ PORT = int(os.environ.get("PORT", 8080))
 # ======================
 
 app = Flask(__name__)
+
+# Global asyncio loop
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
 # Telegram bot (webhook mode)
 application = Application.builder().token(TOKEN).updater(None).build()
@@ -44,9 +49,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             continue
 
-    # ==========================
-    # HTML Template
-    # ==========================
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -105,7 +107,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         html += f'<div class="item"><a href="{u}" target="_blank">{t}</a></div>'
     html += "</div></div></div>"
 
-    # Tabs JS
     html += """
 <script>
 document.querySelectorAll(".tab").forEach(tab=>{
@@ -131,23 +132,19 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.Document.FileExtension("txt"), handle_file))
 
 
-# ======================
-# Flask routes
-# ======================
 @app.route("/")
 def home():
     return "Bot is running with webhook!"
 
 
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
-async def webhook():
+def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    await application.initialize()
-    await application.process_update(update)
+    loop.create_task(application.initialize())
+    loop.create_task(application.process_update(update))
     return "ok"
 
 
 if __name__ == "__main__":
-    # Webhook set
     application.bot.set_webhook(url=f"{APP_URL}/webhook/{TOKEN}")
     app.run(host="0.0.0.0", port=PORT)
