@@ -1,131 +1,149 @@
 import os
-import requests
 from flask import Flask, request
+from telegram import Update, InputFile
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_BOT_TOKEN")
+# ======================
+# 🔑 Env Vars (Render pe add karo)
+TOKEN = os.getenv("BOT_TOKEN", "PASTE_YOUR_TOKEN_HERE")
+APP_URL = os.getenv("APP_URL", "https://your-render-app.onrender.com")  # render ka live URL
+PORT = int(os.environ.get("PORT", 8080))
+# ======================
+
 app = Flask(__name__)
 
-# ---------------- HTML Generator (Same UI + Play Button) ---------------- #
-def txt_to_html(text: str) -> str:
-    subjects = []
-    current_subject = None
-    lines = text.splitlines()
+# Telegram bot instance
+application = Application.builder().token(TOKEN).updater(None).build()
 
-    for line in lines:
-        line = line.strip()
-        if not line:
+
+# /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Send me a TXT file with links, I will generate styled HTML page!")
+
+
+# Handle TXT file
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = await update.message.document.get_file()
+    txt_content = await file.download_as_bytearray()
+    txt_content = txt_content.decode("utf-8")
+
+    videos, pdfs, others = [], [], []
+    for line in txt_content.splitlines():
+        if not line.strip():
+            continue
+        try:
+            type_, title, url = line.split("|")
+            if type_.upper() == "VIDEO":
+                videos.append((title, url))
+            elif type_.upper() == "PDF":
+                pdfs.append((title, url))
+            else:
+                others.append((title, url))
+        except:
             continue
 
-        if line.startswith("# "):  # Subject heading
-            current_subject = {"title": line[2:], "items": []}
-            subjects.append(current_subject)
-        else:
-            if current_subject is None:
-                current_subject = {"title": "General", "items": []}
-                subjects.append(current_subject)
-            current_subject["items"].append(line)
-
+    # ==========================
+    # HTML Template (Same UI as before)
+    # ==========================
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Notes</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generated Subject Page</title>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background:#f0f2f5; }
-    .container { max-width: 1000px; margin:auto; padding:20px; }
-    h1 { text-align:center; margin-bottom:30px; color:#333; }
-    .subject-box {
-      background:#fff; border-radius:12px; padding:20px; margin-bottom:20px;
-      box-shadow:0 4px 10px rgba(0,0,0,0.1);
-    }
-    .subject-title { font-size:22px; font-weight:bold; margin-bottom:15px; color:#007bff; }
-    .item { margin-left:20px; margin-bottom:10px; font-size:16px; }
-    .item button {
-      background:none; border:none; color:#e63946; font-size:16px; cursor:pointer;
-      text-align:left; padding:0;
-    }
-    .item button:hover { text-decoration:underline; }
-    .player { width:100%; max-width:720px; margin:20px auto; display:block; }
-    video { width:100%; border-radius:10px; }
-    .credit { margin-top:40px; text-align:center; font-size:14px; color:#555; opacity:0.8; }
+    body { margin:0; font-family:"Inter",sans-serif; background:#f5f7fa; color:#222; }
+    .credit {background:#fde047;color:#111;font-weight:900;text-align:center;padding:8px;font-size:16px;}
+    .header { background:#111827;color:#fff;text-align:center;padding:20px; }
+    .title { font-size:24px;font-weight:800; }
+    .subheading { font-size:16px;color:#fde047;font-weight:900; margin-top:6px; }
+    .tabs{display:flex;justify-content:center;gap:10px;margin:16px;}
+    .tab{padding:10px 20px;background:#fff;border-radius:8px;cursor:pointer;font-weight:700}
+    .tab.active{background:#0ea5e9;color:#fff}
+    .content{display:none;max-width:1000px;margin:12px auto;padding:0 16px}
+    .content.active{display:block}
+    .card{background:#fff;padding:16px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.1);margin-top:10px;}
+    .section-title{margin:0 0 10px;font-weight:800;color:#0b83ba}
+    .list{display:grid;gap:6px}
+    .item{background:#f3f6fb;padding:10px;border-radius:8px}
+    .item a{text-decoration:none;color:#0ea5e9;font-weight:bold}
+    .item:hover{background:#0ea5e9;}
+    .item:hover a{color:#fff}
   </style>
-  <script>
-    function play(link){
-        const p = document.getElementById('player');
-        p.src = link;
-        p.play();
-        window.scrollTo({ top:0, behavior:'smooth' });
-    }
-  </script>
 </head>
 <body>
-  <div class="container">
-    <h1>📘 My Notes</h1>
-    <video id="player" class="player" controls></video>
+  <div class="credit">MADE BY ANTARYAMI</div>
+  <header class="header">
+    <div class="title">Subject Spl. (Theory + Pract.)</div>
+    <div class="subheading">🙏 JAY BAJRANGBALI 🙏</div>
+  </header>
+
+  <nav class="tabs">
+    <div class="tab active" data-target="videos">Videos</div>
+    <div class="tab" data-target="pdfs">PDFs</div>
+    <div class="tab" data-target="others">Others</div>
+  </nav>
 """
 
-    for subject in subjects:
-        html += f"<div class='subject-box'>"
-        html += f"<div class='subject-title'>{subject['title']}</div>"
-        for item in subject["items"]:
-            if item.startswith("http"):
-                # 👇 Button banaya (new tab nahi khulega, direct play hoga)
-                html += f"<div class='item'><button onclick=\"play('{item}')\">▶️ {item}</button></div>"
-            else:
-                html += f"<div class='item'>{item}</div>"
-        html += "</div>"
+    # PDFs
+    html += '<div id="pdfs" class="content"><div class="card"><h2 class="section-title">All PDFs</h2><div class="list">'
+    for t, u in pdfs:
+        html += f'<div class="item"><a href="{u}" target="_blank">{t}</a></div>'
+    html += "</div></div></div>"
 
+    # Videos
+    html += '<div id="videos" class="content active"><div class="card"><h2 class="section-title">All Videos</h2><div class="list">'
+    for t, u in videos:
+        html += f'<div class="item"><a href="{u}" target="_blank">{t}</a></div>'
+    html += "</div></div></div>"
+
+    # Others
+    html += '<div id="others" class="content"><div class="card"><h2 class="section-title">Other Resources</h2><div class="list">'
+    for t, u in others:
+        html += f'<div class="item"><a href="{u}" target="_blank">{t}</a></div>'
+    html += "</div></div></div>"
+
+    # Tabs JS
     html += """
-    <div class="credit">Made by Antaryami 🇮🇳</div>
-  </div>
+<script>
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    document.querySelectorAll(".content").forEach(c=>c.classList.remove("active"));
+    document.getElementById(tab.dataset.target).classList.add("active");
+  };
+});
+</script>
 </body>
-</html>
-"""
-    return html
+</html>"""
 
-# ---------------- Send HTML back to Telegram ---------------- #
-def send_html(chat_id, html_content):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
-    files = {"document": ("notes.html", html_content, "text/html")}
-    data = {"chat_id": chat_id, "caption": "✅ HTML file generated\nMade by Antaryami 🇮🇳"}
-    requests.post(url, data=data, files=files)
+    with open("output.html", "w", encoding="utf-8") as f:
+        f.write(html)
 
-# ---------------- Webhook ---------------- #
-@app.route(f"/webhook/{TOKEN}", methods=["POST"])
-def webhook():
-    data = request.get_json()
-    if "message" in data:
-        chat_id = data["message"]["chat"]["id"]
+    await update.message.reply_document(InputFile("output.html"))
 
-        # Case 1: Plain text input
-        if "text" in data["message"]:
-            text = data["message"]["text"]
-            html_content = txt_to_html(text)
-            send_html(chat_id, html_content)
 
-        # Case 2: TXT file input
-        elif "document" in data["message"]:
-            file_id = data["message"]["document"]["file_id"]
+# Handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.Document.FileExtension("txt"), handle_file))
 
-            # Get file path from Telegram
-            file_info = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}").json()
-            file_path = file_info["result"]["file_path"]
 
-            # Download file
-            file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-            txt_data = requests.get(file_url).text
-
-            # Convert & send back
-            html_content = txt_to_html(txt_data)
-            send_html(chat_id, html_content)
-
-    return {"ok": True}
-
-# ---------------- Root Route ---------------- #
+# ======================
+# Flask Routes for Webhook
+# ======================
 @app.route("/")
 def home():
-    return "Bot is running ✅"
+    return "Bot is running with webhook!"
 
-# ---------------- Local Run ---------------- #
+@app.route(f"/webhook/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put(update)
+    return "ok"
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # Webhook setup
+    application.bot.set_webhook(url=f"{APP_URL}/webhook/{TOKEN}")
+    app.run(host="0.0.0.0", port=PORT)
