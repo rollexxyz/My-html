@@ -5,8 +5,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 # ======================
 # 🔑 Env Vars (Render pe add karo)
-TOKEN = os.getenv("BOT_TOKEN", "PASTE_YOUR_TOKEN_HERE")
-APP_URL = os.getenv("APP_URL", "https://your-render-app.onrender.com")  # render ka live URL
+TOKEN = os.getenv("BOT_TOKEN", "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0")
+APP_URL = os.getenv("APP_URL", "https://my-html-bd10.onrender.com")  # render ka live URL
 PORT = int(os.environ.get("PORT", 8080))
 # ======================
 
