@@ -4,29 +4,26 @@ from flask import Flask, request
 from telegram import Update, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# ======================
-# Config
 TOKEN = "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0"
 APP_URL = "https://my-html-bd10.onrender.com"
 PORT = int(os.environ.get("PORT", 8080))
-# ======================
 
 app = Flask(__name__)
 
-# Telegram bot (no polling, only webhook)
 application = Application.builder().token(TOKEN).updater(None).build()
 
-
-# /start command
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Send me a TXT file with links (format: TYPE|Title|URL) and I will generate styled HTML page!"
-    )
+    await update.message.reply_text("👋 Send me a TXT file (format: TYPE|Title|URL)")
 
-
-# Handle TXT file
+# Handle TXT
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await update.message.document.get_file()
+    doc = update.message.document
+    if not doc.file_name.endswith(".txt"):
+        await update.message.reply_text("❌ Please send a TXT file only.")
+        return
+
+    file = await doc.get_file()
     txt_content = await file.download_as_bytearray()
     txt_content = txt_content.decode("utf-8")
 
@@ -45,29 +42,13 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             continue
 
-    html = """<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Generated Page</title></head><body>
-<h1>Generated Subject Page</h1>
-"""
-
+    html = "<html><body><h1>Generated Links</h1>"
     if pdfs:
-        html += "<h2>PDFs</h2><ul>"
-        for t, u in pdfs:
-            html += f'<li><a href="{u}" target="_blank">{t}</a></li>'
-        html += "</ul>"
-
+        html += "<h2>PDFs</h2><ul>" + "".join([f'<li><a href="{u}">{t}</a></li>' for t,u in pdfs]) + "</ul>"
     if videos:
-        html += "<h2>Videos</h2><ul>"
-        for t, u in videos:
-            html += f'<li><a href="{u}" target="_blank">{t}</a></li>'
-        html += "</ul>"
-
+        html += "<h2>Videos</h2><ul>" + "".join([f'<li><a href="{u}">{t}</a></li>' for t,u in videos]) + "</ul>"
     if others:
-        html += "<h2>Others</h2><ul>"
-        for t, u in others:
-            html += f'<li><a href="{u}" target="_blank">{t}</a></li>'
-        html += "</ul>"
-
+        html += "<h2>Others</h2><ul>" + "".join([f'<li><a href="{u}">{t}</a></li>' for t,u in others]) + "</ul>"
     html += "</body></html>"
 
     with open("output.html", "w", encoding="utf-8") as f:
@@ -75,30 +56,23 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_document(InputFile("output.html"))
 
-
-# Add handlers
+# Handlers
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.Document.FileExtension("txt"), handle_file))
-
+application.add_handler(MessageHandler(filters.Document.ALL, handle_file))   # ✅ FIXED
 
 @app.route("/")
 def home():
-    return "Bot is running with webhook!"
-
+    return "Bot running!"
 
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
 async def webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    await application.process_update(update)   # ✅ This processes the update
+    await application.process_update(update)
     return "ok"
 
-
 if __name__ == "__main__":
-    # Initialize bot
     asyncio.get_event_loop().run_until_complete(application.initialize())
     asyncio.get_event_loop().run_until_complete(application.start())
-
-    # Set webhook
     application.bot.set_webhook(url=f"{APP_URL}/webhook/{TOKEN}")
     app.run(host="0.0.0.0", port=PORT)
