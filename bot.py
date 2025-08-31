@@ -4,21 +4,23 @@ from telegram import Update, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ======================
-# 🔑 Env Vars (Render pe add karo)
-TOKEN = os.getenv("BOT_TOKEN", "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0")
-APP_URL = os.getenv("APP_URL", "https://my-html-bd10.onrender.com")  # render ka live URL
+# 🔑 Config
+TOKEN = "8221949574:AAFx-XYEwyXwZKsKqoNUeffn0q51908HCc0"
+APP_URL = "https://my-html-bd10.onrender.com"
 PORT = int(os.environ.get("PORT", 8080))
 # ======================
 
 app = Flask(__name__)
 
-# Telegram bot instance
+# Telegram bot (webhook mode)
 application = Application.builder().token(TOKEN).updater(None).build()
 
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Send me a TXT file with links, I will generate styled HTML page!")
+    await update.message.reply_text(
+        "👋 Send me a TXT file with links (format: TYPE|Title|URL) and I will generate styled HTML page!"
+    )
 
 
 # Handle TXT file
@@ -34,16 +36,16 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             type_, title, url = line.split("|")
             if type_.upper() == "VIDEO":
-                videos.append((title, url))
+                videos.append((title.strip(), url.strip()))
             elif type_.upper() == "PDF":
-                pdfs.append((title, url))
+                pdfs.append((title.strip(), url.strip()))
             else:
-                others.append((title, url))
+                others.append((title.strip(), url.strip()))
         except:
             continue
 
     # ==========================
-    # HTML Template (Same UI as before)
+    # HTML Template
     # ==========================
     html = """<!DOCTYPE html>
 <html lang="en">
@@ -130,20 +132,22 @@ application.add_handler(MessageHandler(filters.Document.FileExtension("txt"), ha
 
 
 # ======================
-# Flask Routes for Webhook
+# Flask routes
 # ======================
 @app.route("/")
 def home():
     return "Bot is running with webhook!"
 
+
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
-def webhook():
+async def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put(update)
+    await application.initialize()
+    await application.process_update(update)
     return "ok"
 
 
 if __name__ == "__main__":
-    # Webhook setup
+    # Webhook set
     application.bot.set_webhook(url=f"{APP_URL}/webhook/{TOKEN}")
     app.run(host="0.0.0.0", port=PORT)
