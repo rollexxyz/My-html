@@ -49,6 +49,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             continue
 
+    # ==========================
+    # HTML Template
+    # ==========================
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -107,6 +110,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         html += f'<div class="item"><a href="{u}" target="_blank">{t}</a></div>'
     html += "</div></div></div>"
 
+    # Tabs JS
     html += """
 <script>
 document.querySelectorAll(".tab").forEach(tab=>{
@@ -140,11 +144,16 @@ def home():
 @app.route(f"/webhook/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    loop.create_task(application.initialize())
-    loop.create_task(application.process_update(update))
+    # Queue me daal dete hain
+    application.update_queue.put_nowait(update)
     return "ok"
 
 
 if __name__ == "__main__":
+    # Start dispatcher
+    loop.run_until_complete(application.initialize())
+    loop.run_until_complete(application.start())
+
+    # Webhook set
     application.bot.set_webhook(url=f"{APP_URL}/webhook/{TOKEN}")
     app.run(host="0.0.0.0", port=PORT)
